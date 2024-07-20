@@ -8,7 +8,7 @@ use std::path::Path;
 use aes_gcm::aead::rand_core::RngCore;
 use eframe::App;
 use eframe::egui::{self, CentralPanel, Context};
-use egui::Window;
+use egui::{Window, RichText, Color32};
 
 const KEY: &[u8] = b"an example very very secret key."; // 32 bytes for AES-256
 
@@ -159,10 +159,10 @@ impl App for MyApp {
                 egui::Grid::new("password_grid")
                     .striped(true)
                     .show(ui, |ui| {
-                        ui.label("Web");
-                        ui.label("Usuario");
-                        ui.label("Contraseña");
-                        ui.label("Adicional");
+                        ui.label(RichText::new("Web").color(Color32::WHITE).size(20.0)).highlight();
+                        ui.label(RichText::new("Usuario").color(Color32::WHITE).size(20.0)).highlight();
+                        ui.label(RichText::new("Contraseña").color(Color32::WHITE).size(20.0)).highlight();
+                        ui.label(RichText::new("Adicional").color(Color32::WHITE).size(20.0)).highlight();
                         ui.end_row();
 
                         for entry in self.password_manager.get_entries() {

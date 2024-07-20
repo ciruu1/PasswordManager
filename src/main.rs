@@ -11,6 +11,12 @@ use eframe::App;
 use eframe::egui::{self, CentralPanel, Context};
 use egui::{Window, RichText, Color32};
 use sha2::{Sha256, Digest};
+use rfd::FileDialog;
+
+enum AppState {
+    FileDialog,
+    //Main,
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 struct PasswordEntry {
@@ -105,15 +111,15 @@ struct MyApp {
     show_passwords: HashMap<usize, bool>,
     key: String,
     key_set: bool,
+    file_path: Option<String>,
+    show_file_dialog: bool,
+    state: AppState,
 }
 
 impl MyApp {
     fn new() -> Self {
-        let file_path = "passwords.json";
-        let password_manager = PasswordManager::load_from_file(file_path);
-
         MyApp {
-            password_manager,
+            password_manager: PasswordManager::new(),
             show_add_window: false,
             new_entry: PasswordEntry {
                 web: String::new(),
@@ -124,6 +130,30 @@ impl MyApp {
             show_passwords: HashMap::new(),
             key: String::new(),
             key_set: false,
+            file_path: None,
+            show_file_dialog: true,
+            state: AppState::FileDialog,
+        }
+    }
+
+    fn open_file_dialog(&mut self) {
+        if let Some(path) = FileDialog::new()
+            .set_title("Selecciona un archivo de contraseñas")
+            .pick_file()
+        {
+            self.file_path = Some(path.to_string_lossy().to_string());
+            self.password_manager = PasswordManager::load_from_file(&self.file_path.as_ref().unwrap());
+            self.show_file_dialog = false;
+        }
+    }
+
+    fn save_file_dialog(&mut self) {
+        if let Some(path) = FileDialog::new()
+            .set_title("Guardar archivo de contraseñas")
+            .save_file()
+        {
+            self.file_path = Some(path.to_string_lossy().to_string());
+            self.password_manager.save_to_file(&self.file_path.as_ref().unwrap());
         }
     }
 
@@ -134,7 +164,10 @@ impl MyApp {
         let adicional = self.new_entry.adicional.clone();
 
         self.password_manager.add_entry(web, usuario, contraseña, adicional, self.key.as_str());
-        self.password_manager.save_to_file("passwords.json");
+        //self.password_manager.save_to_file("passwords.json");
+        if let Some(ref path) = self.file_path {
+            self.password_manager.save_to_file(path);
+        }
 
         self.new_entry = PasswordEntry {
             web: String::new(),
@@ -144,10 +177,21 @@ impl MyApp {
         };
         self.show_add_window = false;
     }
-}
 
-impl App for MyApp {
-    fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+    fn show_file_dialog_ui(&mut self, ctx: &Context) {
+        Window::new("Seleccionar archivo")
+            .open(&mut matches!(self.state, AppState::FileDialog))
+            .show(ctx, |ui| {
+                if ui.button("Abrir archivo existente").clicked() {
+                    self.open_file_dialog();
+                }
+                if ui.button("Crear nuevo archivo").clicked() {
+                    self.save_file_dialog();
+                }
+            });
+    }
+
+    fn show_main_ui(&mut self, ctx: &Context) {
         if !self.key_set {
             Window::new("Introduce la clave")
                 .open(&mut true)
@@ -217,6 +261,16 @@ impl App for MyApp {
                     }
                 });
             self.show_add_window = show_add_window;
+        }
+    }
+}
+
+impl App for MyApp {
+    fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        if self.show_file_dialog {
+            self.show_file_dialog_ui(ctx);
+        } else {
+            self.show_main_ui(ctx);
         }
     }
 }

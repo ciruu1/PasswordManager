@@ -10,8 +10,7 @@ use aes_gcm::aead::rand_core::RngCore;
 use eframe::App;
 use eframe::egui::{self, CentralPanel, Context};
 use egui::{Window, RichText, Color32};
-
-const KEY: &[u8] = b"an example very very secret key."; // 32 bytes for AES-256
+use sha2::{Sha256, Digest};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct PasswordEntry {
@@ -50,8 +49,9 @@ impl PasswordManager {
         file.write_all(data.as_bytes()).expect("Unable to write to file");
     }
 
-    fn encrypt_password(password: &str) -> String {
-        let key = GenericArray::from_slice(KEY);
+    fn encrypt_password(password: &str, key: &str) -> String {
+        let key = derive_key(key);
+        let key = GenericArray::from_slice(&key);
         let cipher = Aes256Gcm::new(key);
 
         let mut nonce = [0u8; 12];
@@ -69,8 +69,9 @@ impl PasswordManager {
         general_purpose::STANDARD.encode(&result)
     }
 
-    fn decrypt_password(encoded: &str) -> String {
-        let key = GenericArray::from_slice(KEY);
+    fn decrypt_password(encoded: &str, key: &str) -> String {
+        let key = derive_key(key);
+        let key = GenericArray::from_slice(&key);
         let cipher = Aes256Gcm::new(key);
 
         let decoded = general_purpose::STANDARD.decode(encoded).expect("Decoding failed");
@@ -85,8 +86,8 @@ impl PasswordManager {
         String::from_utf8(plaintext).expect("Invalid UTF-8")
     }
 
-    fn add_entry(&mut self, web: String, usuario: String, contraseña: String, adicional: String) {
-        let encrypted_password = Self::encrypt_password(&contraseña);
+    fn add_entry(&mut self, web: String, usuario: String, contraseña: String, adicional: String, key: &str) {
+        let encrypted_password = Self::encrypt_password(&contraseña, key);
         self.entries.push(PasswordEntry {
             web,
             usuario,
@@ -94,18 +95,6 @@ impl PasswordManager {
             adicional,
         });
     }
-
-    // fn get_entries(&self) -> Vec<PasswordEntry> {
-    //     self.entries
-    //         .iter()
-    //         .map(|entry| PasswordEntry {
-    //             web: entry.web.clone(),
-    //             usuario: entry.usuario.clone(),
-    //             contraseña: Self::decrypt_password(&entry.contraseña),
-    //             adicional: entry.adicional.clone(),
-    //         })
-    //         .collect()
-    // }
 }
 
 
@@ -114,6 +103,8 @@ struct MyApp {
     show_add_window: bool,
     new_entry: PasswordEntry,
     show_passwords: HashMap<usize, bool>,
+    key: String,
+    key_set: bool,
 }
 
 impl MyApp {
@@ -131,6 +122,8 @@ impl MyApp {
                 adicional: String::new(),
             },
             show_passwords: HashMap::new(),
+            key: String::new(),
+            key_set: false,
         }
     }
 
@@ -140,7 +133,7 @@ impl MyApp {
         let contraseña = self.new_entry.contraseña.clone();
         let adicional = self.new_entry.adicional.clone();
 
-        self.password_manager.add_entry(web, usuario, contraseña, adicional);
+        self.password_manager.add_entry(web, usuario, contraseña, adicional, self.key.as_str());
         self.password_manager.save_to_file("passwords.json");
 
         self.new_entry = PasswordEntry {
@@ -155,65 +148,76 @@ impl MyApp {
 
 impl App for MyApp {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
-        CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Password Manager");
+        if !self.key_set {
+            Window::new("Introduce la clave")
+                .open(&mut true)
+                .show(ctx, |ui| {
+                    ui.label("Clave:");
+                    if ui.text_edit_singleline(&mut self.key).lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        self.key_set = true;
+                    }
+                });
+        } else {
+            CentralPanel::default().show(ctx, |ui| {
+                ui.heading("Password Manager");
 
-            if !self.password_manager.entries.is_empty() {
-                egui::Grid::new("password_grid")
-                    .striped(true)
-                    .show(ui, |ui| {
-                        ui.label(RichText::new("Web").color(Color32::WHITE).size(20.0)).highlight();
-                        ui.label(RichText::new("Usuario").color(Color32::WHITE).size(20.0)).highlight();
-                        ui.label(RichText::new("Contraseña").color(Color32::WHITE).size(20.0)).highlight();
-                        ui.label(RichText::new("View").color(Color32::WHITE).size(20.0)).highlight();
-                        ui.label(RichText::new("Adicional").color(Color32::WHITE).size(20.0)).highlight();
-                        ui.end_row();
-
-                        for (index, entry) in self.password_manager.entries.iter().enumerate() {
-                            let mut is_visible = self.show_passwords.get(&index).cloned().unwrap_or(false);
-                            ui.label(&entry.web);
-                            ui.label(&entry.usuario);
-
-                            if is_visible {
-                                ui.label(&PasswordManager::decrypt_password(&entry.contraseña));
-                            } else {
-                                ui.label("********");
-                            }
-                            if ui.checkbox(&mut is_visible, "").clicked() {
-                                self.show_passwords.insert(index, is_visible);
-                            }
-
-                            ui.label(split_text(&entry.adicional, 5));
+                if !self.password_manager.entries.is_empty() {
+                    egui::Grid::new("password_grid")
+                        .striped(true)
+                        .show(ui, |ui| {
+                            ui.label(RichText::new("Web").color(Color32::WHITE).size(20.0)).highlight();
+                            ui.label(RichText::new("Usuario").color(Color32::WHITE).size(20.0)).highlight();
+                            ui.label(RichText::new("Contraseña").color(Color32::WHITE).size(20.0)).highlight();
+                            ui.label(RichText::new("View").color(Color32::WHITE).size(20.0)).highlight();
+                            ui.label(RichText::new("Adicional").color(Color32::WHITE).size(20.0)).highlight();
                             ui.end_row();
-                        }
-                    });
-            } else {
-                ui.label("No hay contraseñas guardadas.");
-            }
 
-            if ui.button("Añadir entrada").clicked() {
-                self.show_add_window = true;
-            }
-        });
+                            for (index, entry) in self.password_manager.entries.iter().enumerate() {
+                                let mut is_visible = self.show_passwords.get(&index).cloned().unwrap_or(false);
+                                ui.label(&entry.web);
+                                ui.label(&entry.usuario);
 
-        let mut show_add_window = self.show_add_window;
-        Window::new("Añadir nueva entrada")
-            .open(&mut show_add_window)
-            .show(ctx, |ui| {
-                ui.label("Web:");
-                ui.text_edit_singleline(&mut self.new_entry.web);
-                ui.label("Usuario:");
-                ui.text_edit_singleline(&mut self.new_entry.usuario);
-                ui.label("Contraseña:");
-                ui.text_edit_singleline(&mut self.new_entry.contraseña);
-                ui.label("Adicional:");
-                ui.text_edit_singleline(&mut self.new_entry.adicional);
+                                if is_visible {
+                                    ui.label(&PasswordManager::decrypt_password(&entry.contraseña, self.key.as_str()));
+                                } else {
+                                    ui.label("********");
+                                }
+                                if ui.checkbox(&mut is_visible, "").clicked() {
+                                    self.show_passwords.insert(index, is_visible);
+                                }
 
-                if ui.button("Guardar").clicked() {
-                    self.add_new_entry();
+                                ui.label(split_text(&entry.adicional, 5));
+                                ui.end_row();
+                            }
+                        });
+                } else {
+                    ui.label("No hay contraseñas guardadas.");
+                }
+
+                if ui.button("Añadir entrada").clicked() {
+                    self.show_add_window = true;
                 }
             });
-        self.show_add_window = show_add_window;
+
+            let mut show_add_window = self.show_add_window;
+            Window::new("Añadir nueva entrada")
+                .open(&mut show_add_window)
+                .show(ctx, |ui| {
+                    ui.label("Web:");
+                    ui.text_edit_singleline(&mut self.new_entry.web);
+                    ui.label("Usuario:");
+                    ui.text_edit_singleline(&mut self.new_entry.usuario);
+                    ui.label("Contraseña:");
+                    ui.text_edit_singleline(&mut self.new_entry.contraseña);
+                    ui.label("Adicional:");
+                    ui.text_edit_singleline(&mut self.new_entry.adicional);
+
+                    if ui.button("Guardar").clicked() {
+                        self.add_new_entry();
+                    }
+                });
+            self.show_add_window = show_add_window;
+        }
     }
 }
 
@@ -240,6 +244,13 @@ fn split_text(text: &String, max_words_per_line: usize) -> String {
     }
 
     result
+}
+
+// Función para derivar una clave de 32 bytes a partir de una clave proporcionada por el usuario
+fn derive_key(user_key: &str) -> Vec<u8> {
+    let mut hasher = Sha256::new();
+    hasher.update(user_key);
+    hasher.finalize().to_vec()
 }
 
 fn main() {

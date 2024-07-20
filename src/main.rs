@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use aes_gcm::aead::{Aead, KeyInit, OsRng, generic_array::GenericArray};
 use aes_gcm::{Aes256Gcm}; // Or `Aes128Gcm`
 use base64::{engine::general_purpose, Engine as _};
@@ -94,17 +95,17 @@ impl PasswordManager {
         });
     }
 
-    fn get_entries(&self) -> Vec<PasswordEntry> {
-        self.entries
-            .iter()
-            .map(|entry| PasswordEntry {
-                web: entry.web.clone(),
-                usuario: entry.usuario.clone(),
-                contraseña: Self::decrypt_password(&entry.contraseña),
-                adicional: entry.adicional.clone(),
-            })
-            .collect()
-    }
+    // fn get_entries(&self) -> Vec<PasswordEntry> {
+    //     self.entries
+    //         .iter()
+    //         .map(|entry| PasswordEntry {
+    //             web: entry.web.clone(),
+    //             usuario: entry.usuario.clone(),
+    //             contraseña: Self::decrypt_password(&entry.contraseña),
+    //             adicional: entry.adicional.clone(),
+    //         })
+    //         .collect()
+    // }
 }
 
 
@@ -112,6 +113,7 @@ struct MyApp {
     password_manager: PasswordManager,
     show_add_window: bool,
     new_entry: PasswordEntry,
+    show_passwords: HashMap<usize, bool>,
 }
 
 impl MyApp {
@@ -128,6 +130,7 @@ impl MyApp {
                 contraseña: String::new(),
                 adicional: String::new(),
             },
+            show_passwords: HashMap::new(),
         }
     }
 
@@ -162,14 +165,25 @@ impl App for MyApp {
                         ui.label(RichText::new("Web").color(Color32::WHITE).size(20.0)).highlight();
                         ui.label(RichText::new("Usuario").color(Color32::WHITE).size(20.0)).highlight();
                         ui.label(RichText::new("Contraseña").color(Color32::WHITE).size(20.0)).highlight();
+                        ui.label(RichText::new("View").color(Color32::WHITE).size(20.0)).highlight();
                         ui.label(RichText::new("Adicional").color(Color32::WHITE).size(20.0)).highlight();
                         ui.end_row();
 
-                        for entry in self.password_manager.get_entries() {
+                        for (index, entry) in self.password_manager.entries.iter().enumerate() {
+                            let mut is_visible = self.show_passwords.get(&index).cloned().unwrap_or(false);
                             ui.label(&entry.web);
                             ui.label(&entry.usuario);
-                            ui.label(&entry.contraseña);
-                            ui.label(&entry.adicional);
+
+                            if is_visible {
+                                ui.label(&PasswordManager::decrypt_password(&entry.contraseña));
+                            } else {
+                                ui.label("********");
+                            }
+                            if ui.checkbox(&mut is_visible, "").clicked() {
+                                self.show_passwords.insert(index, is_visible);
+                            }
+
+                            ui.label(split_text(&entry.adicional, 5));
                             ui.end_row();
                         }
                     });
@@ -201,6 +215,31 @@ impl App for MyApp {
             });
         self.show_add_window = show_add_window;
     }
+}
+
+fn split_text(text: &String, max_words_per_line: usize) -> String {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let mut result = String::new();
+    let mut current_line = String::new();
+    let mut word_count = 0;
+
+    for word in words {
+        if word_count >= max_words_per_line {
+            result.push_str(&current_line.trim_end());
+            result.push('\n');
+            current_line.clear();
+            word_count = 0;
+        }
+        current_line.push_str(word);
+        current_line.push(' ');
+        word_count += 1;
+    }
+
+    if !current_line.is_empty() {
+        result.push_str(&current_line.trim_end());
+    }
+
+    result
 }
 
 fn main() {

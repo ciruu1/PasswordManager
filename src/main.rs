@@ -21,9 +21,9 @@ enum AppState {
 #[derive(Serialize, Deserialize, Debug)]
 struct PasswordEntry {
     web: String,
-    usuario: String,
-    contraseña: String,
-    adicional: String,
+    user: String,
+    password: String,
+    additional: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -96,9 +96,9 @@ impl PasswordManager {
         let encrypted_password = Self::encrypt_password(&contraseña, key);
         self.entries.push(PasswordEntry {
             web,
-            usuario,
-            contraseña: encrypted_password,
-            adicional,
+            user: usuario,
+            password: encrypted_password,
+            additional: adicional,
         });
     }
 }
@@ -123,9 +123,9 @@ impl MyApp {
             show_add_window: false,
             new_entry: PasswordEntry {
                 web: String::new(),
-                usuario: String::new(),
-                contraseña: String::new(),
-                adicional: String::new(),
+                user: String::new(),
+                password: String::new(),
+                additional: String::new(),
             },
             show_passwords: HashMap::new(),
             key: String::new(),
@@ -159,11 +159,11 @@ impl MyApp {
 
     fn add_new_entry(&mut self) {
         let web = self.new_entry.web.clone();
-        let usuario = self.new_entry.usuario.clone();
-        let contraseña = self.new_entry.contraseña.clone();
-        let adicional = self.new_entry.adicional.clone();
+        let user = self.new_entry.user.clone();
+        let password = self.new_entry.password.clone();
+        let additional = self.new_entry.additional.clone();
 
-        self.password_manager.add_entry(web, usuario, contraseña, adicional, self.key.as_str());
+        self.password_manager.add_entry(web, user, password, additional, self.key.as_str());
         //self.password_manager.save_to_file("passwords.json");
         if let Some(ref path) = self.file_path {
             self.password_manager.save_to_file(path);
@@ -171,9 +171,9 @@ impl MyApp {
 
         self.new_entry = PasswordEntry {
             web: String::new(),
-            usuario: String::new(),
-            contraseña: String::new(),
-            adicional: String::new(),
+            user: String::new(),
+            password: String::new(),
+            additional: String::new(),
         };
         self.show_add_window = false;
     }
@@ -210,19 +210,19 @@ impl MyApp {
                         .striped(true)
                         .show(ui, |ui| {
                             ui.label(RichText::new("Web").color(Color32::WHITE).size(20.0)).highlight();
-                            ui.label(RichText::new("Usuario").color(Color32::WHITE).size(20.0)).highlight();
-                            ui.label(RichText::new("Contraseña").color(Color32::WHITE).size(20.0)).highlight();
+                            ui.label(RichText::new("User").color(Color32::WHITE).size(20.0)).highlight();
+                            ui.label(RichText::new("Password").color(Color32::WHITE).size(20.0)).highlight();
                             ui.label(RichText::new("View").color(Color32::WHITE).size(20.0)).highlight();
-                            ui.label(RichText::new("Adicional").color(Color32::WHITE).size(20.0)).highlight();
+                            ui.label(RichText::new("Additional").color(Color32::WHITE).size(20.0)).highlight();
                             ui.end_row();
 
                             for (index, entry) in self.password_manager.entries.iter().enumerate() {
                                 let mut is_visible = self.show_passwords.get(&index).cloned().unwrap_or(false);
                                 ui.label(&entry.web);
-                                ui.label(&entry.usuario);
+                                ui.label(&entry.user);
 
                                 if is_visible {
-                                    ui.label(&PasswordManager::decrypt_password(&entry.contraseña, self.key.as_str()));
+                                    ui.label(&PasswordManager::decrypt_password(&entry.password, self.key.as_str()));
                                 } else {
                                     ui.label("********");
                                 }
@@ -230,7 +230,7 @@ impl MyApp {
                                     self.show_passwords.insert(index, is_visible);
                                 }
 
-                                ui.label(split_text(&entry.adicional, 5));
+                                ui.label(split_text(&entry.additional, 5));
                                 ui.end_row();
                             }
                         });
@@ -249,12 +249,12 @@ impl MyApp {
                 .show(ctx, |ui| {
                     ui.label("Web:");
                     ui.text_edit_singleline(&mut self.new_entry.web);
-                    ui.label("Usuario:");
-                    ui.text_edit_singleline(&mut self.new_entry.usuario);
-                    ui.label("Contraseña:");
-                    ui.text_edit_singleline(&mut self.new_entry.contraseña);
-                    ui.label("Adicional:");
-                    ui.text_edit_singleline(&mut self.new_entry.adicional);
+                    ui.label("User:");
+                    ui.text_edit_singleline(&mut self.new_entry.user);
+                    ui.label("Password:");
+                    ui.text_edit_singleline(&mut self.new_entry.password);
+                    ui.label("Additional info:");
+                    ui.text_edit_singleline(&mut self.new_entry.additional);
 
                     if ui.button("Guardar").clicked() {
                         self.add_new_entry();

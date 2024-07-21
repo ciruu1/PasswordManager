@@ -103,13 +103,24 @@ impl PasswordManager {
             additional: adicional,
         });
     }
+
+    fn update_entry(&mut self, index: usize, web: String, user: String, password: String, additional: String, key: &str) {
+        if let Some(entry) = self.entries.get_mut(index) {
+            entry.web = web;
+            entry.user = user;
+            entry.password = Self::encrypt_data(&password, key);
+            entry.additional = additional;
+        }
+    }
 }
 
 
 struct MyApp {
     password_manager: PasswordManager,
     show_add_window: bool,
+    show_edit_window: Option<usize>,
     new_entry: PasswordEntry,
+    edit_entry: PasswordEntry,
     show_passwords: HashMap<usize, bool>,
     key: String,
     key_set: bool,
@@ -123,7 +134,14 @@ impl MyApp {
         MyApp {
             password_manager: PasswordManager::new(),
             show_add_window: false,
+            show_edit_window: None,
             new_entry: PasswordEntry {
+                web: String::new(),
+                user: String::new(),
+                password: String::new(),
+                additional: String::new(),
+            },
+            edit_entry: PasswordEntry {
                 web: String::new(),
                 user: String::new(),
                 password: String::new(),
@@ -180,6 +198,31 @@ impl MyApp {
         self.show_add_window = false;
     }
 
+    fn edit_entry(&mut self, index: usize) {
+        if let Some(entry) = self.password_manager.entries.get(index) {
+            self.edit_entry.web = entry.web.clone();
+            self.edit_entry.user = entry.user.clone();
+            self.edit_entry.password = PasswordManager::decrypt_data(entry.password.clone().as_str(), self.key.as_str());
+            self.edit_entry.additional = entry.additional.clone();
+            self.show_edit_window = Some(index);
+        }
+    }
+
+    fn save_edited_entry(&mut self, index: usize) {
+        let web = self.edit_entry.web.clone();
+        let user = self.edit_entry.user.clone();
+        //let password = PasswordManager::encrypt_data(self.edit_entry.password.clone().as_str(), self.key.as_str());
+        let password = self.edit_entry.password.clone();
+        let additional = self.edit_entry.additional.clone();
+
+        self.password_manager.update_entry(index, web, user, password, additional, self.key.as_str());
+        if let Some(ref path) = self.file_path {
+            self.password_manager.save_to_file(path, self.key.as_str());
+        }
+
+        self.show_edit_window = None;
+    }
+
     fn show_file_dialog_ui(&mut self, ctx: &Context) {
         if !self.key_set {
             Window::new("Enter the password")
@@ -207,6 +250,8 @@ impl MyApp {
     }
 
     fn show_main_ui(&mut self, ctx: &Context) {
+        let mut edit_index: Option<usize> = None;
+
         CentralPanel::default().show(ctx, |ui| {
             ui.heading("Password Manager");
 
@@ -219,6 +264,7 @@ impl MyApp {
                         ui.label(RichText::new("Password").color(Color32::WHITE).size(20.0)).highlight();
                         ui.label(RichText::new("View").color(Color32::WHITE).size(20.0)).highlight();
                         ui.label(RichText::new("Additional").color(Color32::WHITE).size(20.0)).highlight();
+                        ui.label(RichText::new("Edit").color(Color32::WHITE).size(20.0)).highlight();
                         ui.end_row();
 
                         for (index, entry) in self.password_manager.entries.iter().enumerate() {
@@ -236,6 +282,11 @@ impl MyApp {
                             }
 
                             ui.label(split_text(&entry.additional, 5));
+
+                            if ui.button("Edit").clicked() {
+                                edit_index = Some(index);
+                            }
+
                             ui.end_row();
                         }
                     });
@@ -247,6 +298,10 @@ impl MyApp {
                 self.show_add_window = true;
             }
         });
+
+        if let Some(index) = edit_index {
+            self.edit_entry(index);
+        }
 
         let mut show_add_window = self.show_add_window;
         Window::new("Add a new entry")
@@ -266,6 +321,25 @@ impl MyApp {
                 }
             });
         self.show_add_window = show_add_window;
+
+        if let Some(index) = self.show_edit_window {
+            Window::new("Edit entry")
+                .open(&mut true)
+                .show(ctx, |ui| {
+                    ui.label("Web:");
+                    ui.text_edit_singleline(&mut self.edit_entry.web);
+                    ui.label("User:");
+                    ui.text_edit_singleline(&mut self.edit_entry.user);
+                    ui.label("Password:");
+                    ui.text_edit_singleline(&mut self.edit_entry.password);
+                    ui.label("Additional info:");
+                    ui.text_edit_singleline(&mut self.edit_entry.additional);
+
+                    if ui.button("Save").clicked() {
+                        self.save_edited_entry(index);
+                    }
+                });
+        }
     }
 }
 

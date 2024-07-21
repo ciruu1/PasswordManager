@@ -1,20 +1,21 @@
 use std::collections::HashMap;
-use aes_gcm::aead::{Aead, KeyInit, OsRng, generic_array::GenericArray};
-use aes_gcm::{Aes256Gcm}; // Or `Aes128Gcm`
-use base64::{engine::general_purpose, Engine as _};
-use serde::{Deserialize, Serialize};
+use std::error::Error;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
+
+use aes_gcm::aead::{Aead, generic_array::GenericArray, KeyInit, OsRng};
 use aes_gcm::aead::rand_core::RngCore;
+use aes_gcm::Aes256Gcm;
+use base64::{Engine as _, engine::general_purpose};
+use csv::ReaderBuilder;
 use eframe::App;
 use eframe::egui::{self, CentralPanel, Context};
-use egui::{Window, RichText, Color32, Layout, Direction};
-use egui_extras::{Column, Table, TableBuilder, TableRow};
-use sha2::{Sha256, Digest};
+use egui::Window;
+use egui_extras::{Column, TableBuilder};
 use rfd::FileDialog;
-use csv::ReaderBuilder;
-use std::error::Error;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 enum AppState {
     FileDialog,
@@ -266,7 +267,7 @@ impl MyApp {
                     if let Some(ref file_path) = self.file_path {
                         self.password_manager.save_to_file(file_path, self.key.as_str());
                     }
-                },
+                }
                 Err(e) => {
                     eprintln!("Error importing from CSV: {}", e);
                 }
@@ -284,8 +285,7 @@ impl MyApp {
                         self.key_set = true;
                     }
                 });
-        }
-        else {
+        } else {
             Window::new("Select file")
                 .open(&mut matches!(self.state, AppState::FileDialog))
                 .show(ctx, |ui| {
@@ -297,7 +297,6 @@ impl MyApp {
                     }
                 });
         }
-
     }
 
     fn show_main_ui(&mut self, ctx: &Context) {
@@ -318,109 +317,100 @@ impl MyApp {
                 ui.label("Search:");
                 ui.text_edit_singleline(&mut self.search_query);
             });
-            if !self.password_manager.entries.is_empty() {
-                TableBuilder::new(ui)
-                    .column(Column::initial(100.0).at_least(50.0))
-                    .column(Column::initial(100.0).at_least(50.0))
-                    .column(Column::initial(100.0).at_least(50.0))
-                    .column(Column::initial(100.0).at_least(50.0))
-                    .column(Column::initial(50.0).at_least(50.0))
-                    .column(Column::initial(100.0).at_least(50.0))
-                    .column(Column::initial(50.0).at_least(50.0))
-                    .striped(true)
-                    .resizable(true)
-                    .header(20.0, |mut header| {
-                        header.col(|ui| {
-                            ui.heading("Web Name");
-                        });
-                        header.col(|ui| {
-                            ui.heading("Web");
-                        });
-                        header.col(|ui| {
-                            ui.heading("User");
-                        });
-                        header.col(|ui| {
-                            ui.heading("Password");
-                        });
-                        header.col(|ui| {
-                            ui.heading("View");
-                        });
-                        header.col(|ui| {
-                            ui.heading("Additional");
-                        });
-                        header.col(|ui| {
-                            ui.heading("Edit");
-                        });
-                    })
-                    .body(|mut body| {
-                        for (index, entry) in self.password_manager.entries.iter().enumerate() {
-                            if !self.search_query.is_empty() &&
-                                !entry.web_name.to_lowercase().contains(&self.search_query.to_lowercase()) &&
-                                !entry.web.to_lowercase().contains(&self.search_query.to_lowercase()) &&
-                                !entry.user.to_lowercase().contains(&self.search_query.to_lowercase()) &&
-                                !entry.additional.to_lowercase().contains(&self.search_query.to_lowercase()) {
-                                continue;
-                            }
 
-                            let mut is_visible = self.show_passwords.get(&index).cloned().unwrap_or(false);
-
-                            body.row(20.0, |mut row| {
-
-
-                                row.col(|ui| {
-                                    ui.label(&entry.web_name);
-                                });
-                                row.col(|ui| {
-                                    ui.label(&entry.web);
-                                });
-                                row.col(|ui| {
-                                    ui.label(&entry.user);
-                                });
-
-                                row.col(|ui| {
-                                    if is_visible {
-                                        ui.label(&PasswordManager::decrypt_data(&entry.password, self.key.as_str()));
-                                    } else {
-                                        ui.label("********");
-                                    }
-                                });
-                                row.col(|ui| {
-                                    ui.centered_and_justified(|ui| {
-                                        if ui.checkbox(&mut is_visible, "").clicked() {
-                                            self.show_passwords.insert(index, is_visible);
-                                        }
-                                    });
-                                });
-
-                                row.col(|ui| {
-                                    ui.label(split_text(&entry.additional, 5));
-                                });
-
-                                row.col(|ui| {
-                                    ui.centered_and_justified(|ui| {
-                                        if ui.button("Edit").clicked() {
-                                            edit_index = Some(index);
-                                        }
-                                    });
-                                });
-
-                                //self.toggle_row_selection(row, &row.response());
-                            });
-                        }
-                    });
-            } else {
-                ui.label("There are no passwords stored.");
-            }
-            /*egui::ScrollArea::both()
-                //.max_height(700.0)  // Ajustar altura máxima del área de desplazamiento
+            egui::ScrollArea::both()
                 .show(ui, |ui| {
-                    ui.vertical(|ui| {
+                    if !self.password_manager.entries.is_empty() {
+                        TableBuilder::new(ui)
+                            .column(Column::initial(100.0).at_least(50.0))
+                            .column(Column::initial(200.0).at_least(50.0))
+                            .column(Column::initial(150.0).at_least(50.0))
+                            .column(Column::initial(100.0).at_least(50.0))
+                            .column(Column::initial(50.0).at_least(50.0))
+                            .column(Column::initial(100.0).at_least(50.0))
+                            .column(Column::initial(50.0).at_least(50.0))
+                            .striped(true)
+                            .resizable(true)
+                            .header(20.0, |mut header| {
+                                header.col(|ui| {
+                                    ui.heading("Web Name");
+                                });
+                                header.col(|ui| {
+                                    ui.heading("Web");
+                                });
+                                header.col(|ui| {
+                                    ui.heading("User");
+                                });
+                                header.col(|ui| {
+                                    ui.heading("Password");
+                                });
+                                header.col(|ui| {
+                                    ui.heading("View");
+                                });
+                                header.col(|ui| {
+                                    ui.heading("Additional");
+                                });
+                                header.col(|ui| {
+                                    ui.heading("Edit");
+                                });
+                            })
+                            .body(|mut body| {
+                                for (index, entry) in self.password_manager.entries.iter().enumerate() {
+                                    if !self.search_query.is_empty() &&
+                                        !entry.web_name.to_lowercase().contains(&self.search_query.to_lowercase()) &&
+                                        !entry.web.to_lowercase().contains(&self.search_query.to_lowercase()) &&
+                                        !entry.user.to_lowercase().contains(&self.search_query.to_lowercase()) &&
+                                        !entry.additional.to_lowercase().contains(&self.search_query.to_lowercase()) {
+                                        continue;
+                                    }
 
+                                    let mut is_visible = self.show_passwords.get(&index).cloned().unwrap_or(false);
 
+                                    body.row(20.0, |mut row| {
+                                        row.col(|ui| {
+                                            ui.label(&entry.web_name);
+                                        });
+                                        row.col(|ui| {
+                                            ui.label(&entry.web);
+                                        });
+                                        row.col(|ui| {
+                                            ui.label(&entry.user);
+                                        });
 
-                    });
-                });*/
+                                        row.col(|ui| {
+                                            if is_visible {
+                                                ui.label(&PasswordManager::decrypt_data(&entry.password, self.key.as_str()));
+                                            } else {
+                                                ui.label("********");
+                                            }
+                                        });
+                                        row.col(|ui| {
+                                            ui.centered_and_justified(|ui| {
+                                                if ui.checkbox(&mut is_visible, "").clicked() {
+                                                    self.show_passwords.insert(index, is_visible);
+                                                }
+                                            });
+                                        });
 
+                                        row.col(|ui| {
+                                            ui.label(split_text(&entry.additional, 5));
+                                        });
+
+                                        row.col(|ui| {
+                                            ui.centered_and_justified(|ui| {
+                                                if ui.button("Edit").clicked() {
+                                                    edit_index = Some(index);
+                                                }
+                                            });
+                                        });
+
+                                    });
+                                }
+                            });
+                    } else {
+                        ui.label("There are no passwords stored.");
+                    }
+                });
         });
 
         if let Some(index) = edit_index {

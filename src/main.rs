@@ -13,7 +13,7 @@ use base64::{Engine as _, engine::general_purpose};
 use csv::ReaderBuilder;
 use eframe::App;
 use eframe::egui::{self, CentralPanel, Context};
-use egui::{Color32, RichText, Window};
+use egui::{Color32, RichText, ViewportBuilder, Window};
 use egui_extras::{Column, TableBuilder};
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
@@ -510,8 +510,33 @@ fn derive_key(user_key: &str) -> Vec<u8> {
     hasher.finalize().to_vec()
 }
 
+fn load_icon(path: &str) -> egui::viewport::IconData {
+    let (icon_rgba, icon_width, icon_height) = {
+        let image = image::open(path)
+            .expect("Failed to open icon path")
+            .into_rgba8();
+        let (width, height) = image.dimensions();
+        let rgba = image.into_raw();
+        (rgba, width, height)
+    };
+
+    egui::viewport::IconData {
+        rgba: icon_rgba,
+        width: icon_width,
+        height: icon_height,
+    }
+}
+
 fn main() {
-    let options = eframe::NativeOptions::default();
+    let viewport = ViewportBuilder::default()
+        .with_resizable(true)
+        .with_inner_size(egui::Vec2 { x: 720.0, y: 480.0 })
+        .with_icon(load_icon("icon_256.png"));
+    let options = eframe::NativeOptions {
+        viewport,
+        ..Default::default()
+    };
+
     eframe::run_native(
         "Password Manager",
         options,

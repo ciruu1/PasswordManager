@@ -12,6 +12,8 @@ use eframe::egui::{self, CentralPanel, Context};
 use egui::{Window, RichText, Color32};
 use sha2::{Sha256, Digest};
 use rfd::FileDialog;
+use csv::ReaderBuilder;
+use std::error::Error;
 
 enum AppState {
     FileDialog,
@@ -114,6 +116,24 @@ impl PasswordManager {
             entry.password = Self::encrypt_data(&password, key);
             entry.additional = additional;
         }
+    }
+
+    fn load_from_csv(file_path: &str, key: &str) -> Result<Self, Box<dyn Error>> {
+        let mut rdr = ReaderBuilder::new().from_path(file_path)?;
+        let mut manager = PasswordManager::new();
+
+        for result in rdr.records() {
+            let record = result?;
+            let web_name = record.get(0).unwrap_or("").to_string();
+            let web = record.get(1).unwrap_or("").to_string();
+            let user = record.get(2).unwrap_or("").to_string();
+            let password = record.get(3).unwrap_or("").to_string();
+            let additional = record.get(4).unwrap_or("").to_string();
+
+            manager.add_entry(web_name, web, user, password, additional, key);
+        }
+
+        Ok(manager)
     }
 }
 
@@ -231,6 +251,26 @@ impl MyApp {
         self.show_edit_window = None;
     }
 
+    fn import_from_csv(&mut self) {
+        if let Some(path) = FileDialog::new()
+            .set_title("Select a CSV file")
+            .pick_file()
+        {
+            let result = PasswordManager::load_from_csv(path.to_string_lossy().to_string().as_str(), self.key.as_str());
+            match result {
+                Ok(manager) => {
+                    self.password_manager.entries.extend(manager.entries);
+                    if let Some(ref file_path) = self.file_path {
+                        self.password_manager.save_to_file(file_path, self.key.as_str());
+                    }
+                },
+                Err(e) => {
+                    eprintln!("Error importing from CSV: {}", e);
+                }
+            }
+        }
+    }
+
     fn show_file_dialog_ui(&mut self, ctx: &Context) {
         if !self.key_set {
             Window::new("Enter the password")
@@ -304,8 +344,12 @@ impl MyApp {
                 ui.label("There are no passwords stored.");
             }
 
-            if ui.button("Add new entry").clicked() {
+            if ui.button("Add new entry").highlight().clicked() {
                 self.show_add_window = true;
+            }
+
+            if ui.button("Import from CSV").on_hover_text("Make sure that the file uses\nchrome structure for passwords").clicked() {  // Añadir este botón
+                self.import_from_csv();
             }
         });
 

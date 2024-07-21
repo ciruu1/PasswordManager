@@ -336,7 +336,7 @@ impl MyApp {
                                     ui.heading("Web Name");
                                 });
                                 header.col(|ui| {
-                                    ui.heading("Web");
+                                    ui.heading("URL");
                                 });
                                 header.col(|ui| {
                                     ui.heading("User");
@@ -423,7 +423,7 @@ impl MyApp {
             .show(ctx, |ui| {
                 ui.label("Web Name:");
                 ui.text_edit_singleline(&mut self.new_entry.web_name);
-                ui.label("Web:");
+                ui.label("URL:");
                 ui.text_edit_singleline(&mut self.new_entry.web);
                 ui.label("User:");
                 ui.text_edit_singleline(&mut self.new_entry.user);
@@ -444,7 +444,7 @@ impl MyApp {
                 .show(ctx, |ui| {
                     ui.label("Web Name:");
                     ui.text_edit_singleline(&mut self.edit_entry.web_name);
-                    ui.label("Web:");
+                    ui.label("URL:");
                     ui.text_edit_singleline(&mut self.edit_entry.web);
                     ui.label("User:");
                     ui.text_edit_singleline(&mut self.edit_entry.user);

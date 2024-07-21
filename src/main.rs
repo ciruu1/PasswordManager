@@ -36,26 +36,28 @@ impl PasswordManager {
         PasswordManager { entries: Vec::new() }
     }
 
-    fn load_from_file(file_path: &str) -> Self {
+    fn load_from_file(file_path: &str, key: &str) -> Self {
         if Path::new(file_path).exists() {
             let mut file = File::open(file_path).expect("Unable to open file");
             let mut data = String::new();
             file.read_to_string(&mut data).expect("Unable to read file");
-            serde_json::from_str(&data).expect("Unable to parse JSON")
+            let decrypted_data = Self::decrypt_data(data.as_str(), key);
+            serde_json::from_str(&decrypted_data).expect("Unable to parse JSON")
         } else {
             let manager = PasswordManager::new();
-            manager.save_to_file(file_path);
+            manager.save_to_file(file_path, key);
             manager
         }
     }
 
-    fn save_to_file(&self, file_path: &str) {
+    fn save_to_file(&self, file_path: &str, key: &str) {
         let data = serde_json::to_string_pretty(self).expect("Unable to serialize JSON");
+        let encrypted_data = Self::encrypt_data(data.as_str(), key);
         let mut file = File::create(file_path).expect("Unable to create file");
-        file.write_all(data.as_bytes()).expect("Unable to write to file");
+        file.write_all(encrypted_data.as_bytes()).expect("Unable to write to file");
     }
 
-    fn encrypt_password(password: &str, key: &str) -> String {
+    fn encrypt_data(data: &str, key: &str) -> String {
         let key = derive_key(key);
         let key = GenericArray::from_slice(&key);
         let cipher = Aes256Gcm::new(key);
@@ -66,7 +68,7 @@ impl PasswordManager {
         let nonce_array = GenericArray::from_slice(&nonce);
 
         let ciphertext = cipher
-            .encrypt(nonce_array, password.as_bytes())
+            .encrypt(nonce_array, data.as_bytes())
             .expect("encryption failure!");
 
         let mut result = nonce.to_vec();
@@ -75,7 +77,7 @@ impl PasswordManager {
         general_purpose::STANDARD.encode(&result)
     }
 
-    fn decrypt_password(encoded: &str, key: &str) -> String {
+    fn decrypt_data(encoded: &str, key: &str) -> String {
         let key = derive_key(key);
         let key = GenericArray::from_slice(&key);
         let cipher = Aes256Gcm::new(key);
@@ -87,13 +89,13 @@ impl PasswordManager {
 
         let plaintext = cipher
             .decrypt(nonce_array, ciphertext)
-            .expect("decryption failure!");
+            .expect("Decryption failure!");
 
         String::from_utf8(plaintext).expect("Invalid UTF-8")
     }
 
-    fn add_entry(&mut self, web: String, usuario: String, contraseña: String, adicional: String, key: &str) {
-        let encrypted_password = Self::encrypt_password(&contraseña, key);
+    fn add_entry(&mut self, web: String, usuario: String, password: String, adicional: String, key: &str) {
+        let encrypted_password = Self::encrypt_data(&password, key);
         self.entries.push(PasswordEntry {
             web,
             user: usuario,
@@ -142,7 +144,7 @@ impl MyApp {
             .pick_file()
         {
             self.file_path = Some(path.to_string_lossy().to_string());
-            self.password_manager = PasswordManager::load_from_file(&self.file_path.as_ref().unwrap());
+            self.password_manager = PasswordManager::load_from_file(&self.file_path.as_ref().unwrap(), self.key.as_str());
             self.show_file_dialog = false;
         }
     }
@@ -153,7 +155,7 @@ impl MyApp {
             .save_file()
         {
             self.file_path = Some(path.to_string_lossy().to_string());
-            self.password_manager.save_to_file(&self.file_path.as_ref().unwrap());
+            self.password_manager.save_to_file(&self.file_path.as_ref().unwrap(), self.key.as_str());
         }
     }
 
@@ -166,7 +168,7 @@ impl MyApp {
         self.password_manager.add_entry(web, user, password, additional, self.key.as_str());
         //self.password_manager.save_to_file("passwords.json");
         if let Some(ref path) = self.file_path {
-            self.password_manager.save_to_file(path);
+            self.password_manager.save_to_file(path, self.key.as_str());
         }
 
         self.new_entry = PasswordEntry {
@@ -179,19 +181,6 @@ impl MyApp {
     }
 
     fn show_file_dialog_ui(&mut self, ctx: &Context) {
-        Window::new("Seleccionar archivo")
-            .open(&mut matches!(self.state, AppState::FileDialog))
-            .show(ctx, |ui| {
-                if ui.button("Abrir archivo existente").clicked() {
-                    self.open_file_dialog();
-                }
-                if ui.button("Crear nuevo archivo").clicked() {
-                    self.save_file_dialog();
-                }
-            });
-    }
-
-    fn show_main_ui(&mut self, ctx: &Context) {
         if !self.key_set {
             Window::new("Introduce la clave")
                 .open(&mut true)
@@ -201,67 +190,82 @@ impl MyApp {
                         self.key_set = true;
                     }
                 });
-        } else {
-            CentralPanel::default().show(ctx, |ui| {
-                ui.heading("Password Manager");
-
-                if !self.password_manager.entries.is_empty() {
-                    egui::Grid::new("password_grid")
-                        .striped(true)
-                        .show(ui, |ui| {
-                            ui.label(RichText::new("Web").color(Color32::WHITE).size(20.0)).highlight();
-                            ui.label(RichText::new("User").color(Color32::WHITE).size(20.0)).highlight();
-                            ui.label(RichText::new("Password").color(Color32::WHITE).size(20.0)).highlight();
-                            ui.label(RichText::new("View").color(Color32::WHITE).size(20.0)).highlight();
-                            ui.label(RichText::new("Additional").color(Color32::WHITE).size(20.0)).highlight();
-                            ui.end_row();
-
-                            for (index, entry) in self.password_manager.entries.iter().enumerate() {
-                                let mut is_visible = self.show_passwords.get(&index).cloned().unwrap_or(false);
-                                ui.label(&entry.web);
-                                ui.label(&entry.user);
-
-                                if is_visible {
-                                    ui.label(&PasswordManager::decrypt_password(&entry.password, self.key.as_str()));
-                                } else {
-                                    ui.label("********");
-                                }
-                                if ui.checkbox(&mut is_visible, "").clicked() {
-                                    self.show_passwords.insert(index, is_visible);
-                                }
-
-                                ui.label(split_text(&entry.additional, 5));
-                                ui.end_row();
-                            }
-                        });
-                } else {
-                    ui.label("No hay contraseñas guardadas.");
-                }
-
-                if ui.button("Añadir entrada").clicked() {
-                    self.show_add_window = true;
-                }
-            });
-
-            let mut show_add_window = self.show_add_window;
-            Window::new("Añadir nueva entrada")
-                .open(&mut show_add_window)
+        }
+        else {
+            Window::new("Seleccionar archivo")
+                .open(&mut matches!(self.state, AppState::FileDialog))
                 .show(ctx, |ui| {
-                    ui.label("Web:");
-                    ui.text_edit_singleline(&mut self.new_entry.web);
-                    ui.label("User:");
-                    ui.text_edit_singleline(&mut self.new_entry.user);
-                    ui.label("Password:");
-                    ui.text_edit_singleline(&mut self.new_entry.password);
-                    ui.label("Additional info:");
-                    ui.text_edit_singleline(&mut self.new_entry.additional);
-
-                    if ui.button("Guardar").clicked() {
-                        self.add_new_entry();
+                    if ui.button("Abrir archivo existente").clicked() {
+                        self.open_file_dialog();
+                    }
+                    if ui.button("Crear nuevo archivo").clicked() {
+                        self.save_file_dialog();
                     }
                 });
-            self.show_add_window = show_add_window;
         }
+
+    }
+
+    fn show_main_ui(&mut self, ctx: &Context) {
+        CentralPanel::default().show(ctx, |ui| {
+            ui.heading("Password Manager");
+
+            if !self.password_manager.entries.is_empty() {
+                egui::Grid::new("password_grid")
+                    .striped(true)
+                    .show(ui, |ui| {
+                        ui.label(RichText::new("Web").color(Color32::WHITE).size(20.0)).highlight();
+                        ui.label(RichText::new("User").color(Color32::WHITE).size(20.0)).highlight();
+                        ui.label(RichText::new("Password").color(Color32::WHITE).size(20.0)).highlight();
+                        ui.label(RichText::new("View").color(Color32::WHITE).size(20.0)).highlight();
+                        ui.label(RichText::new("Additional").color(Color32::WHITE).size(20.0)).highlight();
+                        ui.end_row();
+
+                        for (index, entry) in self.password_manager.entries.iter().enumerate() {
+                            let mut is_visible = self.show_passwords.get(&index).cloned().unwrap_or(false);
+                            ui.label(&entry.web);
+                            ui.label(&entry.user);
+
+                            if is_visible {
+                                ui.label(&PasswordManager::decrypt_data(&entry.password, self.key.as_str()));
+                            } else {
+                                ui.label("********");
+                            }
+                            if ui.checkbox(&mut is_visible, "").clicked() {
+                                self.show_passwords.insert(index, is_visible);
+                            }
+
+                            ui.label(split_text(&entry.additional, 5));
+                            ui.end_row();
+                        }
+                    });
+            } else {
+                ui.label("No hay contraseñas guardadas.");
+            }
+
+            if ui.button("Añadir entrada").clicked() {
+                self.show_add_window = true;
+            }
+        });
+
+        let mut show_add_window = self.show_add_window;
+        Window::new("Añadir nueva entrada")
+            .open(&mut show_add_window)
+            .show(ctx, |ui| {
+                ui.label("Web:");
+                ui.text_edit_singleline(&mut self.new_entry.web);
+                ui.label("User:");
+                ui.text_edit_singleline(&mut self.new_entry.user);
+                ui.label("Password:");
+                ui.text_edit_singleline(&mut self.new_entry.password);
+                ui.label("Additional info:");
+                ui.text_edit_singleline(&mut self.new_entry.additional);
+
+                if ui.button("Guardar").clicked() {
+                    self.add_new_entry();
+                }
+            });
+        self.show_add_window = show_add_window;
     }
 }
 

@@ -69,7 +69,7 @@ impl PasswordManager {
 
         let ciphertext = cipher
             .encrypt(nonce_array, data.as_bytes())
-            .expect("encryption failure!");
+            .expect("Encryption failure!");
 
         let mut result = nonce.to_vec();
         result.extend_from_slice(&ciphertext);
@@ -140,7 +140,7 @@ impl MyApp {
 
     fn open_file_dialog(&mut self) {
         if let Some(path) = FileDialog::new()
-            .set_title("Selecciona un archivo de contraseñas")
+            .set_title("Select a password file")
             .pick_file()
         {
             self.file_path = Some(path.to_string_lossy().to_string());
@@ -151,7 +151,7 @@ impl MyApp {
 
     fn save_file_dialog(&mut self) {
         if let Some(path) = FileDialog::new()
-            .set_title("Guardar archivo de contraseñas")
+            .set_title("Save the password file")
             .save_file()
         {
             self.file_path = Some(path.to_string_lossy().to_string());
@@ -182,23 +182,23 @@ impl MyApp {
 
     fn show_file_dialog_ui(&mut self, ctx: &Context) {
         if !self.key_set {
-            Window::new("Introduce la clave")
+            Window::new("Enter the password")
                 .open(&mut true)
                 .show(ctx, |ui| {
-                    ui.label("Clave:");
+                    ui.label("Password:");
                     if ui.text_edit_singleline(&mut self.key).lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                         self.key_set = true;
                     }
                 });
         }
         else {
-            Window::new("Seleccionar archivo")
+            Window::new("Select file")
                 .open(&mut matches!(self.state, AppState::FileDialog))
                 .show(ctx, |ui| {
-                    if ui.button("Abrir archivo existente").clicked() {
+                    if ui.button("Open existing file").clicked() {
                         self.open_file_dialog();
                     }
-                    if ui.button("Crear nuevo archivo").clicked() {
+                    if ui.button("Create new file").clicked() {
                         self.save_file_dialog();
                     }
                 });
@@ -240,16 +240,16 @@ impl MyApp {
                         }
                     });
             } else {
-                ui.label("No hay contraseñas guardadas.");
+                ui.label("There are no passwords stored.");
             }
 
-            if ui.button("Añadir entrada").clicked() {
+            if ui.button("Add new entry").clicked() {
                 self.show_add_window = true;
             }
         });
 
         let mut show_add_window = self.show_add_window;
-        Window::new("Añadir nueva entrada")
+        Window::new("Add a new entry")
             .open(&mut show_add_window)
             .show(ctx, |ui| {
                 ui.label("Web:");
@@ -261,7 +261,7 @@ impl MyApp {
                 ui.label("Additional info:");
                 ui.text_edit_singleline(&mut self.new_entry.additional);
 
-                if ui.button("Guardar").clicked() {
+                if ui.button("Save").clicked() {
                     self.add_new_entry();
                 }
             });

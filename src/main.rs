@@ -123,6 +123,12 @@ impl PasswordManager {
         }
     }
 
+    fn delete_entry(&mut self, index: usize) {
+        if index < self.entries.len() {
+            self.entries.remove(index);
+        }
+    }
+
     fn load_from_csv(file_path: &str, key: &str) -> Result<Self, Box<dyn Error>> {
         let mut rdr = ReaderBuilder::new().from_path(file_path)?;
         let mut manager = PasswordManager::new();
@@ -304,6 +310,7 @@ impl MyApp {
 
     fn show_main_ui(&mut self, ctx: &Context) {
         let mut edit_index: Option<usize> = None;
+        let mut delete_index: Option<usize> = None;
 
         CentralPanel::default().show(ctx, |ui| {
             ui.heading(RichText::new("Password Manager").size(30.0));
@@ -334,6 +341,7 @@ impl MyApp {
                             .column(Column::initial(50.0).at_least(50.0))
                             .column(Column::remainder().at_least(50.0).clip(true).resizable(true))
                             .column(Column::initial(50.0).at_least(50.0))
+                            .column(Column::initial(50.0).at_least(50.0))
                             .striped(true)
                             .resizable(true)
                             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
@@ -360,6 +368,9 @@ impl MyApp {
                                 });
                                 header.col(|ui| {
                                     ui.heading("Edit");
+                                });
+                                header.col(|ui| {
+                                    ui.heading("Delete");
                                 });
                             })
                             .body(|mut body| {
@@ -412,6 +423,14 @@ impl MyApp {
                                             });
                                         });
 
+                                        row.col(|ui| {
+                                            ui.centered_and_justified(|ui| {
+                                                if ui.button("Delete").clicked() {
+                                                    delete_index = Some(index);
+                                                }
+                                            });
+                                        });
+
                                     });
                                 }
                             });
@@ -423,6 +442,21 @@ impl MyApp {
 
         if let Some(index) = edit_index {
             self.edit_entry(index);
+        }
+
+        if let Some(index) = delete_index {
+            let confirm = rfd::MessageDialog::new()
+                .set_title("Confirm Deletion")
+                .set_description("Are you sure you want to delete this entry?")
+                .set_buttons(rfd::MessageButtons::YesNo)
+                .show();
+
+            if confirm == rfd::MessageDialogResult::Yes {
+                self.password_manager.delete_entry(index);
+                if let Some(ref path) = self.file_path {
+                    self.password_manager.save_to_file(path, self.key.as_str());
+                }
+            }
         }
 
         let mut show_add_window = self.show_add_window;

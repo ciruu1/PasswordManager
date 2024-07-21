@@ -150,6 +150,7 @@ struct MyApp {
     file_path: Option<String>,
     show_file_dialog: bool,
     state: AppState,
+    search_query: String,
 }
 
 impl MyApp {
@@ -178,6 +179,7 @@ impl MyApp {
             file_path: None,
             show_file_dialog: true,
             state: AppState::FileDialog,
+            search_query: String::new(),
         }
     }
 
@@ -303,6 +305,11 @@ impl MyApp {
         CentralPanel::default().show(ctx, |ui| {
             ui.heading("Password Manager");
 
+            ui.horizontal(|ui| {
+                ui.label("Search:");
+                ui.text_edit_singleline(&mut self.search_query);
+            });
+
             if !self.password_manager.entries.is_empty() {
                 egui::Grid::new("password_grid")
                     .striped(true)
@@ -317,6 +324,13 @@ impl MyApp {
                         ui.end_row();
 
                         for (index, entry) in self.password_manager.entries.iter().enumerate() {
+                            if !self.search_query.is_empty() && !entry.web_name.to_lowercase().contains(&self.search_query.to_lowercase())
+                                && !entry.web.to_lowercase().contains(&self.search_query.to_lowercase())
+                                && !entry.user.to_lowercase().contains(&self.search_query.to_lowercase())
+                                && !entry.additional.to_lowercase().contains(&self.search_query.to_lowercase()) {
+                                continue;
+                            }
+
                             let mut is_visible = self.show_passwords.get(&index).cloned().unwrap_or(false);
                             ui.label(&entry.web_name);
                             ui.label(&entry.web);

@@ -161,7 +161,12 @@ struct MyApp {
     file_path: Option<String>,
     show_file_dialog: bool,
     state: AppState,
+    // Search bar
     search_query: String,
+    // Password window
+    show_generate_password_window: bool,
+    generated_password: String,
+    password_length: usize,
 }
 
 impl MyApp {
@@ -191,6 +196,9 @@ impl MyApp {
             show_file_dialog: true,
             state: AppState::FileDialog,
             search_query: String::new(),
+            show_generate_password_window: false,
+            generated_password: String::new(),
+            password_length: 12, // Longitud inicial de la contraseña
         }
     }
 
@@ -308,6 +316,34 @@ impl MyApp {
         }
     }
 
+    fn show_generate_password_window(&mut self, ctx: &Context) {
+        let mut show_generate_password_window = self.show_generate_password_window;
+
+        Window::new("Generate a secure password")
+            .open(&mut show_generate_password_window)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Password length:");
+                    ui.add(egui::Slider::new(&mut self.password_length, 8..=32).text("characters"));
+                });
+
+                if ui.button("Generate").clicked() {
+                    self.generated_password = generate_password(self.password_length);
+                }
+
+                ui.horizontal(|ui| {
+                    ui.label("Generated password:");
+                    ui.text_edit_singleline(&mut self.generated_password);
+                });
+
+                if ui.button("Copy").clicked() {
+                    ui.output_mut(|o| o.copied_text = self.generated_password.clone());
+                }
+            });
+
+        self.show_generate_password_window = show_generate_password_window;
+    }
+
     fn show_main_ui(&mut self, ctx: &Context) {
         let mut edit_index: Option<usize> = None;
         let mut delete_index: Option<usize> = None;
@@ -317,6 +353,10 @@ impl MyApp {
 
             if ui.button("Add new entry").highlight().clicked() {
                 self.show_add_window = true;
+            }
+
+            if ui.button("Generate Password").highlight().clicked() {
+                self.show_generate_password_window = true;
             }
 
             if ui.button("Import from CSV").on_hover_text("Make sure that the file uses\nchrome structure for passwords").clicked() {  // Añadir este botón
@@ -440,6 +480,10 @@ impl MyApp {
                 });
         });
 
+        if self.show_generate_password_window {
+            self.show_generate_password_window(ctx);
+        }
+
         if let Some(index) = edit_index {
             self.edit_entry(index);
         }
@@ -511,6 +555,23 @@ impl App for MyApp {
             self.show_main_ui(ctx);
         }
     }
+}
+
+fn generate_password(length: usize) -> String {
+    use rand::Rng;
+
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
+
+    let mut rng = rand::thread_rng();
+
+    let password: String = (0..length)
+        .map(|_| {
+            let idx = rng.gen_range(0..CHARSET.len());
+            CHARSET[idx] as char
+        })
+        .collect();
+
+    password
 }
 
 fn split_text(text: &String, max_words_per_line: usize) -> String {

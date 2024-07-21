@@ -13,7 +13,7 @@ use base64::{Engine as _, engine::general_purpose};
 use csv::ReaderBuilder;
 use eframe::App;
 use eframe::egui::{self, CentralPanel, Context};
-use egui::Window;
+use egui::{Color32, RichText, Window};
 use egui_extras::{Column, TableBuilder};
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
@@ -305,7 +305,7 @@ impl MyApp {
         let mut edit_index: Option<usize> = None;
 
         CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Password Manager");
+            ui.heading(RichText::new("Password Manager").color(Color32::WHITE).size(30.0));
 
             if ui.button("Add new entry").highlight().clicked() {
                 self.show_add_window = true;
@@ -320,19 +320,24 @@ impl MyApp {
                 ui.text_edit_singleline(&mut self.search_query);
             });
 
+            let available_height = ui.available_height();
+
             egui::ScrollArea::both()
                 .show(ui, |ui| {
                     if !self.password_manager.entries.is_empty() {
                         TableBuilder::new(ui)
-                            .column(Column::initial(100.0).at_least(50.0))
-                            .column(Column::initial(200.0).at_least(50.0))
-                            .column(Column::initial(150.0).at_least(50.0))
+                            .column(Column::remainder().at_least(50.0).clip(true).resizable(true))
+                            .column(Column::remainder().at_least(50.0).clip(true).resizable(true))
+                            .column(Column::remainder().at_least(50.0).clip(true).resizable(true))
                             .column(Column::initial(100.0).at_least(50.0))
                             .column(Column::initial(50.0).at_least(50.0))
-                            .column(Column::initial(100.0).at_least(50.0))
+                            .column(Column::remainder().at_least(50.0).clip(true).resizable(true))
                             .column(Column::initial(50.0).at_least(50.0))
                             .striped(true)
                             .resizable(true)
+                            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                            .min_scrolled_height(0.0)
+                            .max_scroll_height(available_height)
                             .header(20.0, |mut header| {
                                 header.col(|ui| {
                                     ui.heading("Web Name");

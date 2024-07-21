@@ -305,59 +305,6 @@ impl MyApp {
         CentralPanel::default().show(ctx, |ui| {
             ui.heading("Password Manager");
 
-            ui.horizontal(|ui| {
-                ui.label("Search:");
-                ui.text_edit_singleline(&mut self.search_query);
-            });
-
-            if !self.password_manager.entries.is_empty() {
-                egui::Grid::new("password_grid")
-                    .striped(true)
-                    .show(ui, |ui| {
-                        ui.label(RichText::new("Web name").color(Color32::WHITE).size(20.0)).highlight();
-                        ui.label(RichText::new("Web").color(Color32::WHITE).size(20.0)).highlight();
-                        ui.label(RichText::new("User").color(Color32::WHITE).size(20.0)).highlight();
-                        ui.label(RichText::new("Password").color(Color32::WHITE).size(20.0)).highlight();
-                        ui.label(RichText::new("View").color(Color32::WHITE).size(20.0)).highlight();
-                        ui.label(RichText::new("Additional").color(Color32::WHITE).size(20.0)).highlight();
-                        ui.label(RichText::new("Edit").color(Color32::WHITE).size(20.0)).highlight();
-                        ui.end_row();
-
-                        for (index, entry) in self.password_manager.entries.iter().enumerate() {
-                            if !self.search_query.is_empty() && !entry.web_name.to_lowercase().contains(&self.search_query.to_lowercase())
-                                && !entry.web.to_lowercase().contains(&self.search_query.to_lowercase())
-                                && !entry.user.to_lowercase().contains(&self.search_query.to_lowercase())
-                                && !entry.additional.to_lowercase().contains(&self.search_query.to_lowercase()) {
-                                continue;
-                            }
-
-                            let mut is_visible = self.show_passwords.get(&index).cloned().unwrap_or(false);
-                            ui.label(&entry.web_name);
-                            ui.label(&entry.web);
-                            ui.label(&entry.user);
-
-                            if is_visible {
-                                ui.label(&PasswordManager::decrypt_data(&entry.password, self.key.as_str()));
-                            } else {
-                                ui.label("********");
-                            }
-                            if ui.checkbox(&mut is_visible, "").clicked() {
-                                self.show_passwords.insert(index, is_visible);
-                            }
-
-                            ui.label(split_text(&entry.additional, 5));
-
-                            if ui.button("Edit").clicked() {
-                                edit_index = Some(index);
-                            }
-
-                            ui.end_row();
-                        }
-                    });
-            } else {
-                ui.label("There are no passwords stored.");
-            }
-
             if ui.button("Add new entry").highlight().clicked() {
                 self.show_add_window = true;
             }
@@ -365,6 +312,67 @@ impl MyApp {
             if ui.button("Import from CSV").on_hover_text("Make sure that the file uses\nchrome structure for passwords").clicked() {  // Añadir este botón
                 self.import_from_csv();
             }
+
+            ui.horizontal(|ui| {
+                ui.label("Search:");
+                ui.text_edit_singleline(&mut self.search_query);
+            });
+            egui::ScrollArea::both()
+                //.max_height(700.0)  // Ajustar altura máxima del área de desplazamiento
+                .show(ui, |ui| {
+                    ui.vertical(|ui| {
+                        if !self.password_manager.entries.is_empty() {
+                            egui::Grid::new("password_grid")
+                                .striped(true)
+                                .show(ui, |ui| {
+                                    ui.label(RichText::new("Web name").color(Color32::WHITE).size(20.0)).highlight();
+                                    ui.label(RichText::new("Web").color(Color32::WHITE).size(20.0)).highlight();
+                                    ui.label(RichText::new("User").color(Color32::WHITE).size(20.0)).highlight();
+                                    ui.label(RichText::new("Password").color(Color32::WHITE).size(20.0)).highlight();
+                                    ui.label(RichText::new("View").color(Color32::WHITE).size(20.0)).highlight();
+                                    ui.label(RichText::new("Additional").color(Color32::WHITE).size(20.0)).highlight();
+                                    ui.label(RichText::new("Edit").color(Color32::WHITE).size(20.0)).highlight();
+                                    ui.end_row();
+
+                                    for (index, entry) in self.password_manager.entries.iter().enumerate() {
+                                        if !self.search_query.is_empty() && !entry.web_name.to_lowercase().contains(&self.search_query.to_lowercase())
+                                            && !entry.web.to_lowercase().contains(&self.search_query.to_lowercase())
+                                            && !entry.user.to_lowercase().contains(&self.search_query.to_lowercase())
+                                            && !entry.additional.to_lowercase().contains(&self.search_query.to_lowercase()) {
+                                            continue;
+                                        }
+
+                                        let mut is_visible = self.show_passwords.get(&index).cloned().unwrap_or(false);
+                                        ui.label(&entry.web_name);
+                                        ui.label(&entry.web);
+                                        ui.label(&entry.user);
+
+                                        if is_visible {
+                                            ui.label(&PasswordManager::decrypt_data(&entry.password, self.key.as_str()));
+                                        } else {
+                                            ui.label("********");
+                                        }
+                                        if ui.checkbox(&mut is_visible, "").clicked() {
+                                            self.show_passwords.insert(index, is_visible);
+                                        }
+
+                                        ui.label(split_text(&entry.additional, 5));
+
+                                        if ui.button("Edit").clicked() {
+                                            edit_index = Some(index);
+                                        }
+
+                                        ui.end_row();
+                                    }
+                                });
+                        } else {
+                            ui.label("There are no passwords stored.");
+                        }
+
+
+                    });
+                });
+
         });
 
         if let Some(index) = edit_index {

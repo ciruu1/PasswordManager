@@ -20,6 +20,7 @@ enum AppState {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct PasswordEntry {
+    web_name: String,
     web: String,
     user: String,
     password: String,
@@ -94,9 +95,10 @@ impl PasswordManager {
         String::from_utf8(plaintext).expect("Invalid UTF-8")
     }
 
-    fn add_entry(&mut self, web: String, usuario: String, password: String, adicional: String, key: &str) {
+    fn add_entry(&mut self, web_name: String, web: String, usuario: String, password: String, adicional: String, key: &str) {
         let encrypted_password = Self::encrypt_data(&password, key);
         self.entries.push(PasswordEntry {
+            web_name,
             web,
             user: usuario,
             password: encrypted_password,
@@ -104,8 +106,9 @@ impl PasswordManager {
         });
     }
 
-    fn update_entry(&mut self, index: usize, web: String, user: String, password: String, additional: String, key: &str) {
+    fn update_entry(&mut self, index: usize, web_name: String, web: String, user: String, password: String, additional: String, key: &str) {
         if let Some(entry) = self.entries.get_mut(index) {
+            entry.web_name = web_name;
             entry.web = web;
             entry.user = user;
             entry.password = Self::encrypt_data(&password, key);
@@ -136,12 +139,14 @@ impl MyApp {
             show_add_window: false,
             show_edit_window: None,
             new_entry: PasswordEntry {
+                web_name: String::new(),
                 web: String::new(),
                 user: String::new(),
                 password: String::new(),
                 additional: String::new(),
             },
             edit_entry: PasswordEntry {
+                web_name: String::new(),
                 web: String::new(),
                 user: String::new(),
                 password: String::new(),
@@ -178,18 +183,20 @@ impl MyApp {
     }
 
     fn add_new_entry(&mut self) {
+        let web_name = self.new_entry.web_name.clone();
         let web = self.new_entry.web.clone();
         let user = self.new_entry.user.clone();
         let password = self.new_entry.password.clone();
         let additional = self.new_entry.additional.clone();
 
-        self.password_manager.add_entry(web, user, password, additional, self.key.as_str());
+        self.password_manager.add_entry(web_name, web, user, password, additional, self.key.as_str());
         //self.password_manager.save_to_file("passwords.json");
         if let Some(ref path) = self.file_path {
             self.password_manager.save_to_file(path, self.key.as_str());
         }
 
         self.new_entry = PasswordEntry {
+            web_name: String::new(),
             web: String::new(),
             user: String::new(),
             password: String::new(),
@@ -200,6 +207,7 @@ impl MyApp {
 
     fn edit_entry(&mut self, index: usize) {
         if let Some(entry) = self.password_manager.entries.get(index) {
+            self.edit_entry.web_name = entry.web_name.clone();
             self.edit_entry.web = entry.web.clone();
             self.edit_entry.user = entry.user.clone();
             self.edit_entry.password = PasswordManager::decrypt_data(entry.password.clone().as_str(), self.key.as_str());
@@ -209,13 +217,13 @@ impl MyApp {
     }
 
     fn save_edited_entry(&mut self, index: usize) {
+        let web_name = self.edit_entry.web_name.clone();
         let web = self.edit_entry.web.clone();
         let user = self.edit_entry.user.clone();
-        //let password = PasswordManager::encrypt_data(self.edit_entry.password.clone().as_str(), self.key.as_str());
         let password = self.edit_entry.password.clone();
         let additional = self.edit_entry.additional.clone();
 
-        self.password_manager.update_entry(index, web, user, password, additional, self.key.as_str());
+        self.password_manager.update_entry(index, web_name, web, user, password, additional, self.key.as_str());
         if let Some(ref path) = self.file_path {
             self.password_manager.save_to_file(path, self.key.as_str());
         }
@@ -259,6 +267,7 @@ impl MyApp {
                 egui::Grid::new("password_grid")
                     .striped(true)
                     .show(ui, |ui| {
+                        ui.label(RichText::new("Web name").color(Color32::WHITE).size(20.0)).highlight();
                         ui.label(RichText::new("Web").color(Color32::WHITE).size(20.0)).highlight();
                         ui.label(RichText::new("User").color(Color32::WHITE).size(20.0)).highlight();
                         ui.label(RichText::new("Password").color(Color32::WHITE).size(20.0)).highlight();
@@ -269,6 +278,7 @@ impl MyApp {
 
                         for (index, entry) in self.password_manager.entries.iter().enumerate() {
                             let mut is_visible = self.show_passwords.get(&index).cloned().unwrap_or(false);
+                            ui.label(&entry.web_name);
                             ui.label(&entry.web);
                             ui.label(&entry.user);
 
@@ -307,6 +317,8 @@ impl MyApp {
         Window::new("Add a new entry")
             .open(&mut show_add_window)
             .show(ctx, |ui| {
+                ui.label("Web Name:");
+                ui.text_edit_singleline(&mut self.new_entry.web_name);
                 ui.label("Web:");
                 ui.text_edit_singleline(&mut self.new_entry.web);
                 ui.label("User:");
@@ -326,6 +338,8 @@ impl MyApp {
             Window::new("Edit entry")
                 .open(&mut true)
                 .show(ctx, |ui| {
+                    ui.label("Web Name:");
+                    ui.text_edit_singleline(&mut self.edit_entry.web_name);
                     ui.label("Web:");
                     ui.text_edit_singleline(&mut self.edit_entry.web);
                     ui.label("User:");

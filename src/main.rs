@@ -277,7 +277,7 @@ impl MyApp {
                 .open(&mut true)
                 .show(ctx, |ui| {
                     ui.label("Password:");
-                    if ui.text_edit_singleline(&mut self.key).lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    if ui.add(egui::TextEdit::singleline(&mut self.key).password(true)).lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                         self.key_set = true;
                     }
                 });

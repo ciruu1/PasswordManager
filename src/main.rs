@@ -58,6 +58,50 @@ impl PasswordManager {
         }
     }
 
+    fn export_to_plain_json(&self, key: &str, export_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        // Creamos una copia desencriptada de todas las entradas
+        let decrypted_entries: Vec<PasswordEntry> = self.entries.iter().map(|entry| {
+            PasswordEntry {
+                web_name: entry.web_name.clone(),
+                web: entry.web.clone(),
+                user: entry.user.clone(),
+                password: PasswordManager::decrypt_data(&entry.password, key),
+                additional: entry.additional.clone(),
+            }
+        }).collect();
+
+        // Serializamos a JSON bonito
+        let json = serde_json::to_string_pretty(&decrypted_entries)?;
+
+        // Guardamos en el archivo
+        let mut file = File::create(export_path)?;
+        file.write_all(json.as_bytes())?;
+
+        Ok(())
+    }
+
+    fn export_to_plain_csv(&self, key: &str, export_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        // Crea un escritor CSV
+        let mut wtr = csv::Writer::from_path(export_path)?;
+
+        // Escribimos el encabezado
+        wtr.write_record(&["web_name", "web", "user", "password", "additional"])?;
+
+        // Escribimos cada registro con la contraseña desencriptada
+        for entry in &self.entries {
+            wtr.write_record(&[
+                &entry.web_name,
+                &entry.web,
+                &entry.user,
+                &PasswordManager::decrypt_data(&entry.password, key),
+                &entry.additional,
+            ])?;
+        }
+
+        wtr.flush()?; // Aseguramos que todo se escriba en disco
+        Ok(())
+    }
+
     fn save_to_file(&self, file_path: &str, key: &str) {
         let data = serde_json::to_string_pretty(self).expect("Unable to serialize JSON");
         let encrypted_data = Self::encrypt_data(data.as_str(), key);
@@ -361,6 +405,34 @@ impl MyApp {
 
             if ui.button("Import from CSV").on_hover_text("Make sure that the file uses\nchrome structure for passwords").clicked() {  // Añadir este botón
                 self.import_from_csv();
+            }
+
+            if ui.button("Export to Plain JSON").clicked() {
+                if let Some(path) = FileDialog::new()
+                    .set_title("Export passwords as plain JSON")
+                    .save_file()
+                {
+                    let export_path = path.to_string_lossy().to_string();
+                    if let Err(e) = self.password_manager.export_to_plain_json(&self.key, &export_path) {
+                        eprintln!("Error exporting JSON: {}", e);
+                    } else {
+                        println!("Passwords exported successfully to {}", export_path);
+                    }
+                }
+            }
+
+            if ui.button("Export to Plain CSV").clicked() {
+                if let Some(path) = FileDialog::new()
+                    .set_title("Export passwords as plain CSV")
+                    .save_file()
+                {
+                    let export_path = path.to_string_lossy().to_string();
+                    if let Err(e) = self.password_manager.export_to_plain_csv(&self.key, &export_path) {
+                        eprintln!("Error exporting CSV: {}", e);
+                    } else {
+                        println!("Passwords exported successfully to {}", export_path);
+                    }
+                }
             }
 
             ui.horizontal(|ui| {
